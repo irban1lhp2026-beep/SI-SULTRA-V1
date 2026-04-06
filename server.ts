@@ -30,6 +30,9 @@ io.on('connection', (socket) => {
 const DATA_DIR = path.join(process.cwd(), 'data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR);
 
+const UPLOADS_DIR = path.join(process.cwd(), 'uploads');
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR);
+
 const LHP_FILE = path.join(DATA_DIR, 'lhp_data.json');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 
@@ -374,18 +377,31 @@ app.use('/uploads', express.static('uploads'));
 
 // Vite middleware
 async function startServer() {
-  if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
-    app.use(vite.middlewares);
-  } else {
+  console.log('Starting server, NODE_ENV:', process.env.NODE_ENV);
+  
+  if (process.env.NODE_ENV === 'production') {
     const distPath = path.join(process.cwd(), 'dist');
+    console.log('Serving production build from:', distPath);
+    
+    if (!fs.existsSync(distPath)) {
+      console.error('CRITICAL: dist directory not found! Did you run npm run build?');
+    }
+    
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
+  } else {
+    console.log('Starting Vite in middleware mode...');
+    try {
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: 'spa',
+      });
+      app.use(vite.middlewares);
+    } catch (viteError) {
+      console.error('Failed to start Vite server:', viteError);
+    }
   }
 
   httpServer.listen(PORT, '0.0.0.0', () => {
@@ -393,4 +409,6 @@ async function startServer() {
   });
 }
 
-startServer();
+startServer().catch(err => {
+  console.error('Fatal error during server startup:', err);
+});
